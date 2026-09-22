@@ -3,8 +3,10 @@ package com.solarsync.pro.protocols
 import com.solarsync.pro.core.network.ModbusPacketCodec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -123,9 +125,10 @@ class SolisCloudProtocolAdapter(
         val signature = Base64.encodeToString(mac.doFinal(stringToSign.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
         val authHeader = "API $cloudKeyId:$signature"
 
+        val jsonMediaType = "application/json".toMediaType()
         val request = Request.Builder()
             .url("https://www.soliscloud.com:13333$resourcePath")
-            .post(okhttp3.RequestBody.create("application/json".toMediaTypeOrNull(), body))
+            .post(body.toRequestBody(jsonMediaType))
             .addHeader("Content-MD5", contentMd5)
             .addHeader("Content-Type", "application/json")
             .addHeader("Date", dateHeader)
@@ -146,5 +149,3 @@ class SolisCloudProtocolAdapter(
         }
     }
 }
-
-private fun String.toMediaTypeOrNull() = okhttp3.MediaType.parse(this)
