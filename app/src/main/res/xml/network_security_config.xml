@@ -1,0 +1,22 @@
+<!-- 
+  Inverter dongles (Knox/Deye WiFi loggers, Inverex/Voltronic RS232-WiFi bridges,
+  Solis local Modbus, Fronius/SolaX SunSpec) are LAN devices that speak plain
+  TCP / cleartext HTTP on the local subnet — they do not present TLS certs.
+  This config scopes cleartext permission to private network ranges only,
+  instead of allowing it app-wide.
+ -->
+<network-security-config>
+<domain-config cleartextTrafficPermitted="true">
+<!--  Common local subnets the phone's WiFi may be on  -->
+<domain includeSubdomains="true">192.168.0.0</domain>
+<domain includeSubdomains="true">192.168.1.0</domain>
+<domain includeSubdomains="true">10.0.0.0</domain>
+<domain includeSubdomains="true">172.16.0.0</domain>
+</domain-config>
+<!--  SolisCloud REST API and any future cloud fallback uses normal HTTPS  -->
+<base-config cleartextTrafficPermitted="false">
+<trust-anchors>
+<certificates src="system"/>
+</trust-anchors>
+</base-config>
+</network-security-config>
