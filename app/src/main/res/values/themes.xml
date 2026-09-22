@@ -1,7 +1,16 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme -->
-    <style name="Theme.SolarSyncPro" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/solarsync_orange</item>
-        <item name="android:statusBarColor">?attr/colorPrimary</item>
+    <!--
+      Base application theme. This app is pure Jetpack Compose (no XML
+      views, Material3 styling is applied inside MainActivity's
+      MaterialTheme { ... } wrapper), so the Activity theme just needs to
+      be a plain platform theme — it doesn't need com.google.android.material
+      (the classic Material Components library), which isn't a dependency
+      here. Using "Theme.Material3.DayNight.NoActionBar" without that
+      library fails resource linking.
+    -->
+    <style name="Theme.SolarSyncPro" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/solarsync_orange</item>
+        <item name="android:statusBarColor">@color/solarsync_orange</item>
+        <item name="android:windowBackground">@android:color/white</item>
     </style>
 </resources>
