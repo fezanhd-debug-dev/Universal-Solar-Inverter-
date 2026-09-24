@@ -16,6 +16,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Bluetooth LE scan/connect for Renogy, EPEVER and SRNE BLE controllers.
+         BLUETOOTH_SCAN / BLUETOOTH_CONNECT are the Android 12+ (API 31+) runtime
+         permissions; BLUETOOTH / BLUETOOTH_ADMIN cover older devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
     <application
         android:name=".SolarSyncApp"
         android:allowBackup="true"
