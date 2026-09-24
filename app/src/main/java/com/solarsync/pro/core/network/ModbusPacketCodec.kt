@@ -116,6 +116,23 @@ object ModbusPacketCodec {
         return sb.toString().trim('\u0000')
     }
 
+    /**
+     * Parses a standard Modbus RTU "Read Holding/Input Registers" response:
+     * [unitId][funcCode][byteCount][data...][crc(2)]. Used by the BLE
+     * adapters (Renogy/EPEVER/SRNE), which get this exact frame shape back
+     * from their write/notify characteristic once unwrapped from BLE.
+     */
+    fun parseReadRegistersRtuResponse(raw: ByteArray): IntArray {
+        require(raw.size >= 5) { "Response too short to be a valid Modbus RTU register reply" }
+        val byteCount = raw[2].toInt() and 0xFF
+        val registerCount = byteCount / 2
+        return IntArray(registerCount) { i ->
+            val hi = raw[3 + i * 2].toInt() and 0xFF
+            val lo = raw[4 + i * 2].toInt() and 0xFF
+            (hi shl 8) or lo
+        }
+    }
+
     // ---------------------------------------------------------------
     // Solarman / IGEN "V5" frame wrapper — wraps a Modbus RTU PDU for
     // transport over the Deye/Knox WiFi dongle's TCP port 8899.
