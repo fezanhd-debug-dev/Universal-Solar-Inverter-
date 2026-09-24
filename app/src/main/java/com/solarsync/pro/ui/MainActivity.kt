@@ -4,13 +4,17 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -173,20 +177,20 @@ private fun DevicesScreen(viewModel: DiscoveryViewModel, settingsViewModel: Sett
     val state by viewModel.uiState.collectAsState()
     val settings by settingsViewModel.state.collectAsState()
 
+    // --- WiFi/LAN permission + subnet auto-detect ---
     var hasLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
         )
     }
-    val permissionLauncher = rememberLauncherForActivityResult(
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasLocationPermission = granted }
 
     var subnet by remember { mutableStateOf("192.168.1") }
     var autoDetectAttempted by remember { mutableStateOf(false) }
 
-    // Auto-fill the subnet field from the phone's own WiFi IP once permission is granted.
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission && !autoDetectAttempted) {
             autoDetectAttempted = true
@@ -194,13 +198,33 @@ private fun DevicesScreen(viewModel: DiscoveryViewModel, settingsViewModel: Sett
         }
     }
 
+    // --- Bluetooth permission (Android 12+ needs BLUETOOTH_SCAN + BLUETOOTH_CONNECT explicitly) ---
+    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+    } else {
+        emptyList() // pre-12: BLUETOOTH/BLUETOOTH_ADMIN are normal (install-time) permissions
+    }
+    var hasBluetoothPermission by remember {
+        mutableStateOf(
+            bluetoothPermissions.isEmpty() ||
+                bluetoothPermissions.all {
+                    ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                }
+        )
+    }
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results -> hasBluetoothPermission = results.values.all { it } }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Discover Inverter", style = MaterialTheme.typography.headlineSmall)
+        // ===================== WiFi / LAN section =====================
+        Text("Discover Inverter (WiFi)", style = MaterialTheme.typography.headlineSmall)
 
         if (!hasLocationPermission) {
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -209,7 +233,7 @@ private fun DevicesScreen(viewModel: DiscoveryViewModel, settingsViewModel: Sett
                         "Location permission lets the app read your phone's WiFi network so it can " +
                             "auto-fill the right subnet and scan for your inverter."
                     )
-                    Button(onClick = { permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) }) {
+                    Button(onClick = { locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) }) {
                         Text("Grant Permission")
                     }
                 }
@@ -242,6 +266,30 @@ private fun DevicesScreen(viewModel: DiscoveryViewModel, settingsViewModel: Sett
             Text("Scan Network")
         }
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        // ===================== Bluetooth section =====================
+        Text("Discover Inverter (Bluetooth)", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "For Renogy, EPEVER and SRNE controllers paired with a BLE module.",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        if (!hasBluetoothPermission) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Bluetooth permission is needed to scan for and connect to your controller's BLE module.")
+                    Button(onClick = { bluetoothPermissionLauncher.launch(bluetoothPermissions.toTypedArray()) }) {
+                        Text("Grant Permission")
+                    }
+                }
+            }
+        } else {
+            Button(onClick = { viewModel.startBleScan(context, settings.pollingIntervalSeconds) }) {
+                Text("Scan Bluetooth")
+            }
+        }
+
         when (val discovery = state.discovery) {
             is DiscoveryViewModel.DiscoveryState.Idle -> Text("Not scanned yet.")
             is DiscoveryViewModel.DiscoveryState.Scanning -> Text("Scanning…")
@@ -253,6 +301,37 @@ private fun DevicesScreen(viewModel: DiscoveryViewModel, settingsViewModel: Sett
                         "network as the inverter's dongle, and that the subnet prefix above matches " +
                         "it (check the dongle's own app or its IP label if unsure)."
                 )
+            is DiscoveryViewModel.DiscoveryState.BleNotFound ->
+                Text(
+                    "No Renogy/EPEVER/SRNE BLE module found nearby. Make sure the controller's " +
+                        "Bluetooth module is powered and not already connected to another phone/app."
+                )
+            is DiscoveryViewModel.DiscoveryState.BleDevicesFound ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Found ${discovery.devices.size} device(s) — tap one to connect:")
+                    discovery.devices.forEach { device ->
+                        ElevatedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                                    .clickable { viewModel.connectToBleDevice(context, device) },
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(device.name, style = MaterialTheme.typography.titleMedium)
+                                    Text(device.brand.name, style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text("Connect")
+                            }
+                        }
+                    }
+                }
+            is DiscoveryViewModel.DiscoveryState.BleConnected ->
+                Text("Connected to ${discovery.device.name} (${discovery.device.brand})")
         }
     }
 }
